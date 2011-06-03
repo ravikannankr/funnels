@@ -99,7 +99,7 @@ class Piwik_Funnels extends Piwik_Plugin
             $actionUrl = htmlspecialchars_decode($sanitizedUrl);
             $idActionUrl = $action->getIdActionUrl();
 
-            $url = Piwik_Common::getRequestVar( 'url', '', 'string', $action->getRequest());
+            $url = $actionUrl;//Piwik_Common::getRequestVar( 'url', '', 'string', $action->getRequest());
 
             printDebug("idActionUrl" . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
             # Is this the next action for a recorded funnel step? 
@@ -371,9 +371,9 @@ class Piwik_Funnels extends Piwik_Plugin
             foreach($funnel['steps'] as $step)
             {
                 $idStep = $step['idstep'];
-                $nb_actions = $numeric_records[self::getRecordName('nb_actions', $idFunnel, $idStep)]->value;
+                $nb_actions = $numeric_records[self::getRecordName('nb_actions', $idFunnel, $idStep)];
                 if ($i == 0) $funnel_start_actions = $nb_actions;
-                $nb_next_step_actions = $numeric_records[self::getRecordName('nb_next_step_actions', $idFunnel, $idStep)]->value;
+                $nb_next_step_actions = $numeric_records[self::getRecordName('nb_next_step_actions', $idFunnel, $idStep)];
                 $percent_next_step_actions = $this->percent($nb_next_step_actions, $nb_actions);
                 $recordName = self::getRecordName('percent_next_step_actions', $idFunnel, $idStep);
                 $archiveProcessing->insertNumericRecord($recordName, $percent_next_step_actions);
@@ -576,6 +576,62 @@ class Piwik_Funnels extends Piwik_Plugin
     function percent($amount, $total) {
         if ($total == 0) return 0;
         return 100 * $amount / $total;
+    }
+    /**
+     * @param string $url The string to see if it matches
+     * @param string $pattern_type One of 'regex', 'contains', or 'exact'
+     * @param string $pattern The pattern to attempt to match
+     * @param boolean $case_sensitive true to match in a case-sensitive way
+     * @return boolean true if $url matches $pattern given the $pattern_type 
+     * and $case_sensitive-ity
+     */
+    static public function isMatch($url, $pattern_type, $pattern, $case_sensitive = true) {
+
+        $match = false;
+
+        switch($pattern_type)
+        {
+        case 'regex':
+            if(strpos($pattern, '/') !== false 
+                && strpos($pattern, '\\/') === false)
+            {
+                $pattern = str_replace('/', '\\/', $pattern);
+            }
+            $pattern = '/' . $pattern . '/'; 
+            if(!$case_sensitive)
+            {
+                $pattern .= 'i';
+            }
+            $match = (@preg_match($pattern, $url) == 1);
+            break;
+        case 'contains':
+            if($case_sensitive)
+            {
+                $matched = strpos($url, $pattern);
+            }
+            else
+            {
+                $matched = stripos($url, $pattern);
+            }
+            $match = ($matched !== false);
+            break;
+        case 'exact':
+            if($case_sensitive)
+            {
+                $matched = strcmp($pattern, $url);
+            }
+            else
+            {
+                $matched = strcasecmp($pattern, $url);
+            }
+            $match = ($matched == 0);
+            break;
+        default:
+            throw new Exception(Piwik_TranslateException('General_ExceptionInvalidGoalPattern', array($pattern_type)));
+            break;
+        }
+
+        return $match;
     }
 }
 
