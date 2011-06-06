@@ -5,6 +5,7 @@ A Piwik (http://piwik.org/) plugin that allows the definition, analysis and visu
 Credits
 =======
 German translation by Uwe Schulz
+Updated to work with Piwik v1.5-rc4 by Jess Telford @ Zibbet.com
 
 Changelog
 =========
