@@ -47,6 +47,8 @@ class Piwik_Funnels extends Piwik_Plugin
             'Menu.add' => 'addMenus',
             'Common.fetchWebsiteAttributes' => 'fetchFunnelsFromDb',
             'Tracker.Action.record' => 'recordFunnelSteps',
+            'Tracker.newVisitorInformation' => 'recordNewVisitorInformation',
+            'Tracker.knownVisitorInformation' => 'recordKnownVisitorInformation',
             'ArchiveProcessing_Day.compute' => 'archiveDay',
             'ArchiveProcessing_Period.compute' => 'archivePeriod',
         );
@@ -74,6 +76,80 @@ class Piwik_Funnels extends Piwik_Plugin
         $array['funnels'] = Piwik_Funnels_API::getInstance()->getFunnels($idsite);
     }
     
+    function recordNewVisitorInformation( $notification )
+    {
+        // This is called within the function handleNewVisit() in 
+        // core/Tracker/Visit.php@427
+        
+        // A new visitor may be a returning visitor that took longer than 30 
+        // minutes to complete the conversion
+
+        // Since if they are infact returning it was logged as an 'exit', we 
+        // can just log this directly as an 'entry' - the numbers still match 
+        // up for total visitors to the page, just not the 'conversion' 
+        // percentage to the next step
+        
+        // See core/Tracker/Visit.php@499 for the data passed into 
+        // $notification
+
+        // shortcut to know when a goal is hit;
+        // $notification['visit_goal_converted']
+    }
+
+    function recordKnownVisitorInformation( $notification )
+    {
+        // This is called within the function handleKnownVisit() in 
+        // core/Tracker/Visit.php@315
+        
+        // A returning visitor 
+
+        // See core/Tracker/Visit.php@951 for the data passed into
+        // $notification
+
+        // shortcut to know when a goal is hit;
+        // $notification['visit_goal_converted']
+/*        
+        $idSite = $notification['idSite'];
+
+        printDebug('Looking for funnel steps');
+        $websiteAttributes = Piwik_Common::getCacheWebsiteAttributes( $idSite );
+        if(isset($websiteAttributes['funnels']))
+        {
+            $funnels = $websiteAttributes['funnels'];
+            printDebug('got funnel steps');
+        } else {
+            $funnels = array();
+        }
+
+        if (count($funnels) <= 0)
+        {
+            return;
+        }
+
+        $action = $notification->getNotificationObject();
+
+        $this->doStepMatchAndSave(
+            $funnels,
+            $notification['idvisit'],
+            $notification['idLinkVisitAction'], //< May not be able to get this value from this callback :(
+            $notification['idRefererActionUrl'], //< May not be able to get this value from this callback :(
+            $action->getActionName(),
+            htmlspecialchars_decode($action->getActionUrl()),
+            $action->getIdActionUrl()
+        );
+*/
+    }
+
+    /**
+     * This is called when an Action is called on piwik.php - ie, an actul 
+     * visitor has hit the site, and the JS has performed a call to Piwik. 
+     * This means that a manual goal conversion will NOT trigger this 
+     * callback! 
+     * 
+     * @param mixed $notification 
+     * @access public
+     * @return void
+     */
     function recordFunnelSteps( $notification )
     {
         $info = $notification->getNotificationInfo();
@@ -88,29 +164,50 @@ class Piwik_Funnels extends Piwik_Plugin
             $funnels = array();
         }
 
-        if (count($funnels) > 0)
+        if (count($funnels) <= 0)
         {
-            $idVisit = $info['idVisit'];
-            $idLinkVisitAction = $info['idLinkVisitAction'];
-            $idRefererAction = $info['idRefererActionUrl'];
-            $action = $notification->getNotificationObject();
-            $actionName = $action->getActionName();
-            $sanitizedUrl = $action->getActionUrl();
-            $actionUrl = htmlspecialchars_decode($sanitizedUrl);
-            $idActionUrl = $action->getIdActionUrl();
-
-            $url = Piwik_Common::getRequestVar( 'url', '', 'string', $action->getRequest());
-
-            printDebug("idActionUrl" . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
-            # Is this the next action for a recorded funnel step? 
-            $previous_step_action = Piwik_Query("UPDATE ".Piwik_Common::prefixTable('log_funnel_step')."
-                SET   idaction_url_next = ?
-                WHERE idsite = ? 
-                AND   idvisit = ? 
-                AND   idaction_url = ?
-                AND   idaction_url_next is null", 
-                array($idActionUrl, $idSite, $idVisit, $idRefererAction));
+            return;
         }
+
+        $action = $notification->getNotificationObject();
+
+        // idLinkVisitAction is the UID of the user's current Action 
+        // interacting with Piwik.
+        // idRefererActionurl is the UID of theuer's LAST Action interacting 
+        // with Piwik.
+        // These two together give a link to a history of actions, and form a 
+        // type of linked list in the log_funnel_step table.
+        $this->doStepMatchAndSave(
+            $funnels,
+            $info['idVisit'],
+            $info['idLinkVisitAction'],
+            $info['idRefererActionUrl'],
+            $action->getActionName(),
+            htmlspecialchars_decode($action->getActionUrl()),
+            $action->getIdActionUrl()
+        );
+
+    }
+
+    function doStepMatchAndSave(
+        $funnels,
+        $idVisit,
+        $idLinkVisitAction,
+        $idRefererAction,
+        $actionName,
+        $actionUrl,
+        $idActionUrl
+    ) {
+
+        printDebug("idActionUrl" . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
+        # Is this the next action for a recorded funnel step? 
+        $previous_step_action = Piwik_Query("UPDATE ".Piwik_Common::prefixTable('log_funnel_step')."
+            SET   idaction_url_next = ?
+            WHERE idsite = ? 
+            AND   idvisit = ? 
+            AND   idaction_url = ?
+            AND   idaction_url_next is null", 
+            array($idActionUrl, $idSite, $idVisit, $idRefererAction));
 
         foreach($funnels as &$funnel)
         {
