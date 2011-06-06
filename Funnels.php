@@ -99,7 +99,7 @@ class Piwik_Funnels extends Piwik_Plugin
             $actionUrl = htmlspecialchars_decode($sanitizedUrl);
             $idActionUrl = $action->getIdActionUrl();
 
-            $url = $actionUrl;//Piwik_Common::getRequestVar( 'url', '', 'string', $action->getRequest());
+            $url = Piwik_Common::getRequestVar( 'url', '', 'string', $action->getRequest());
 
             printDebug("idActionUrl" . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
             # Is this the next action for a recorded funnel step? 
@@ -111,13 +111,22 @@ class Piwik_Funnels extends Piwik_Plugin
                 AND   idaction_url_next is null", 
                 array($idActionUrl, $idSite, $idVisit, $idRefererAction));
         }
+
         foreach($funnels as &$funnel)
         {
             $steps = $funnel['steps'];
 
             foreach($steps as &$step) 
             {               
-                if ($step['url'] == $actionUrl or $step['name'] == $actionName) 
+                $url = $actionUrl;
+
+                // Matching on Page Title
+                if($step['match_attribute'] == 'title')
+                {
+                    $url = $actionName;
+                }
+
+                if (self::isMatch($url, $step['pattern_type'], $step['url'], $step['case_sensitive']))
                 {
                     printDebug("Matched Goal Funnel " . $funnel['idfunnel'] . " Step " . $step['idstep'] . "(name: " . $step['name'] . ", url: " . $step['url']. "). ");
                     $serverTime = time();
@@ -192,7 +201,7 @@ class Piwik_Funnels extends Piwik_Plugin
             {
                 if($row['idgoal'] == $idGoal)
                 {
-                    $goalConversions[$row['idaction_url']] = $row['nb_conversions'];
+                    $goalConversions[$row['label']] = $row[Piwik_Archive::INDEX_GOAL_NB_CONVERSIONS];
                 }
                 
             }
@@ -402,7 +411,10 @@ class Piwik_Funnels extends Piwik_Plugin
                                     `idfunnel` int(11) NOT NULL, 
                          			`idstep` int(11) NOT NULL, 
                          			`name` varchar(255) NOT NULL,
+                                    `match_attribute` varchar(20) NOT NULL,
                          			`url` text NOT NULL,
+                                    `pattern_type` varchar(10) NOT NULL,
+                                    `case_sensitive` tinyint(4) NOT NULL,
                           			`deleted` tinyint(4) NOT NULL default '0',
                          			PRIMARY KEY  (`idfunnel`, `idsite`, `idstep`) ";
         self::createTable('funnel_step', $funnel_steps_table_spec);

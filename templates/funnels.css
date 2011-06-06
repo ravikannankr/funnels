@@ -1,9 +1,5 @@
 /* Funnel form */
 
-#AddEditFunnels {
-  width: 614px;
-}
-
 #AddEditFunnels .but_submit{
 	clear:both; 
 	color:#fff;
@@ -72,11 +68,6 @@
   vertical-align: top;
 }
 
-.funnel td.entry, 
-.funnel td.exit {
-	width: 48%;
-}
-
 .funnel td.entry h4 {
 	text-align: right;
 }
@@ -107,8 +98,8 @@
 	margin: 0px 0px 0.3em;
 }
 
-.funnel td.step h3 .label{
-	display: block;
+.funnel td.step span.type{
+    font-size: 0.8em;
 }
 
 .funnel td.step h4 {

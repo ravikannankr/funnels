@@ -106,9 +106,14 @@ class Piwik_Funnels_API
 			{
 				continue;
 			}
+
 			$currentStepIds[] = $idStep;
 			$name = $this->checkName($step['name']);
-			$url = $this->checkUrl($step['url']);
+			$url = $this->checkUrl($step['pattern']);
+			$pattern_type = $this->checkPatternType($step['pattern_type']);
+			$match_attribute = $this->checkMatchAttribute($step['match_attribute']);
+			$case_sensitive = $step['case_sensitive'];
+
 			$exists = Piwik_FetchOne("SELECT idstep
 									FROM ".Piwik_Common::prefixTable('funnel_step')." 
 									WHERE idsite = ? 
@@ -116,14 +121,17 @@ class Piwik_Funnels_API
 									AND idstep = ?", array($idSite, $idFunnel, $idStep));
 			if ($exists){
 				Piwik_Query("UPDATE ".Piwik_Common::prefixTable('funnel_step')."
-							 SET name = ?, url = ?, deleted = 0
-							 WHERE idsite = ? AND idstep = ? AND idfunnel = ?", 
-							 array($name, $url, $idSite, $idStep, $idFunnel));	
+                             SET name = ?, url = ?, match_attribute = ?, pattern_type = ?, case_sensitive = ?,
+                             deleted = 0
+                             WHERE idsite = ? AND idstep = ? AND idfunnel = ?", 
+                             array($name, $url, $match_attribute, $pattern_type, $case_sensitive, $idSite, $idStep,
+                             $idFunnel));
 			} else {
 				Piwik_Query("INSERT INTO ". Piwik_Common::prefixTable('funnel_step')."
-							 (idsite, idfunnel, idstep, name, url) 
-							 VALUES (?, ?, ?, ?, ?)", 
-   							 array($idSite, $idFunnel, $idStep, $name, $url));
+							 (idsite, idfunnel, idstep, name, url, match_attribute, pattern_type, case_sensitive) 
+							 VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+                             array($idSite, $idFunnel, $idStep, $name, $url, $match_attribute, $pattern_type,
+                             $case_sensitive));
 			}
 		}
 		// Any steps not currently defined should be set to deleted
@@ -226,5 +234,14 @@ class Piwik_Funnels_API
 	{
 		return urldecode($url);
 	}
+
+    private function checkPatternType($str) {
+        return urldecode($str);
+    }
+	
+    private function checkMatchAttribute($str) {
+        return urldecode($str);
+    }
+    
 	
 }

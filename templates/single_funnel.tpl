@@ -20,9 +20,9 @@
 				<div>
 					<div>
 						<div>
-							<h3>
-								<span class="label">{$step.name} {$step.url}</span> {$step.nb_actions}
-							</h3>
+							<h3>{$step.name}</h3>
+                            <div><span class="type">{$step.pattern_type}:</span> {$step.url}</div>
+                            <h3>{$step.nb_actions}</h3>
 							<b class="funnel_bar_graph">
 								<b style="width:{$step.percent_next_step_actions}%"></b>
 							</b>
