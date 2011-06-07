@@ -57,6 +57,7 @@ class Piwik_Funnels extends Piwik_Plugin
             'Tracker.knownVisitorUpdate' => 'recordManualFunnelSteps',
             'ArchiveProcessing_Day.compute' => 'archiveDay',
             'ArchiveProcessing_Period.compute' => 'archivePeriod',
+            'Tracker.Visit.isExcluded' => 'includeManualURLGoal',
         );
         return $hooks;
     }
@@ -266,6 +267,28 @@ class Piwik_Funnels extends Piwik_Plugin
         }
     }
 
+    function includeManualURLGoal($notification) {
+
+        if (!Piwik_Common::getRequestVar('token_auth', false)) {
+            return;
+        }
+
+        if (!Piwik_Common::getRequestVar('cid', false)) {
+            return;
+        }
+
+        if (!Piwik_Common::getRequestVar('idgoal', false)) {
+            return;
+        }
+
+        if (!Piwik_Common::getRequestVar('idsite', false)) {
+            return;
+        }
+
+        $excluded =& $notification->getNotificationObject();
+        $excluded = false;
+
+    }
     function addMenus()
     {
         $idSite = Piwik_Common::getRequestVar('idSite');
