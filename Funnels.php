@@ -18,6 +18,8 @@
 class Piwik_Funnels extends Piwik_Plugin
 {
     
+    // 'magic' number to indicate a conversion that was done manually
+	const INDEX_MANUAL_CONVERSION = 0;
     /**
      * Return information about this plugin.
      *
@@ -41,14 +43,18 @@ class Piwik_Funnels extends Piwik_Plugin
     
     function getListHooksRegistered()
     {
+        // Note that we don't hook into the new visitor callback as it is not 
+        // necessary - The only time it would be useful is when triggering a 
+        // manual goal conversion for a new user, but in that case, it means 
+        // that there is no referring Action, and the actual goal conversion 
+        // is logged elsewhere in Piwik, so we don't need to do anything extra
         $hooks = array(
             'AssetManager.getCssFiles' => 'getCssFiles',
             'AssetManager.getJsFiles' => 'getJsFiles',
             'Menu.add' => 'addMenus',
             'Common.fetchWebsiteAttributes' => 'fetchFunnelsFromDb',
             'Tracker.Action.record' => 'recordFunnelSteps',
-            'Tracker.newVisitorInformation' => 'recordNewVisitorInformation',
-            'Tracker.knownVisitorInformation' => 'recordKnownVisitorInformation',
+            'Tracker.knownVisitorUpdate' => 'recordManualFunnelSteps',
             'ArchiveProcessing_Day.compute' => 'archiveDay',
             'ArchiveProcessing_Period.compute' => 'archivePeriod',
         );
@@ -76,68 +82,69 @@ class Piwik_Funnels extends Piwik_Plugin
         $array['funnels'] = Piwik_Funnels_API::getInstance()->getFunnels($idsite);
     }
     
-    function recordNewVisitorInformation( $notification )
+    /**
+     * This is called within the function handleKnownVisit() in 
+     * core/Tracker/Visit.php@315
+     *
+     * We are catching this callback purely to be able to log manual goal 
+     * conversions since they don't trigger the Action record callback.
+     *
+     * Note that this is called BEFORE this action is logged to the DB, which 
+     * means we can take advantage of the fact that the last 'exit' action ID 
+     * is the 'referring' ID, and the one to be updated to (ie; passed in in 
+     * the notification object) is the 'current' action ID
+     * 
+     * @param mixed $notification See the variable $valuesToUpdate in core/Tracker/Visit.php@318-361
+     * @access public
+     * @return void
+     */
+    function recordManualFunnelSteps( $notification )
     {
-        // This is called within the function handleNewVisit() in 
-        // core/Tracker/Visit.php@427
-        
-        // A new visitor may be a returning visitor that took longer than 30 
-        // minutes to complete the conversion
+        $info = $notification->getNotificationObject();
 
-        // Since if they are infact returning it was logged as an 'exit', we 
-        // can just log this directly as an 'entry' - the numbers still match 
-        // up for total visitors to the page, just not the 'conversion' 
-        // percentage to the next step
-        
-        // See core/Tracker/Visit.php@499 for the data passed into 
-        // $notification
-
-        // shortcut to know when a goal is hit;
-        // $notification['visit_goal_converted']
-    }
-
-    function recordKnownVisitorInformation( $notification )
-    {
-        // This is called within the function handleKnownVisit() in 
-        // core/Tracker/Visit.php@315
-        
-        // A returning visitor 
-
-        // See core/Tracker/Visit.php@951 for the data passed into
-        // $notification
-
-        // shortcut to know when a goal is hit;
-        // $notification['visit_goal_converted']
-/*        
-        $idSite = $notification['idSite'];
-
-        printDebug('Looking for funnel steps');
-        $websiteAttributes = Piwik_Common::getCacheWebsiteAttributes( $idSite );
-        if(isset($websiteAttributes['funnels']))
-        {
-            $funnels = $websiteAttributes['funnels'];
-            printDebug('got funnel steps');
-        } else {
-            $funnels = array();
-        }
-
-        if (count($funnels) <= 0)
-        {
+        // if this is NOT a manual conversion, skip this and let the Action 
+        // callback catch it
+        if (isset($info['visit_exit_idaction_url']) && $info['visit_exit_idaction_url'] !== Piwik_Funnels::INDEX_MANUAL_CONVERSION) {
             return;
         }
 
-        $action = $notification->getNotificationObject();
+        $idSite = Piwik_Common::getRequestVar("idsite");
 
-        $this->doStepMatchAndSave(
-            $funnels,
-            $notification['idvisit'],
-            $notification['idLinkVisitAction'], //< May not be able to get this value from this callback :(
-            $notification['idRefererActionUrl'], //< May not be able to get this value from this callback :(
-            $action->getActionName(),
-            htmlspecialchars_decode($action->getActionUrl()),
-            $action->getIdActionUrl()
+        // Ok, so the 'current' idActionUrl is stored in $info['visit_exit_idaction_url']
+        // This callback is called before the current action is actually 
+        // stored in the DB, so we can just grab the most recent row from 
+        // log_link_visit_action to get the refering action.
+        // Also use this query to find the Visit ID of this visit
+
+		$timeLookBack = date('Y-m-d H:i:s', time() - Piwik_Tracker_Visit::TIME_IN_PAST_TO_SEARCH_FOR_VISITOR);
+
+        $visits = Piwik_Query(
+            "SELECT idvisit, visit_exit_idaction_url
+            FROM ".Piwik_Common::prefixTable('log_visit')." 
+            WHERE idsite = ? 
+            AND   visit_last_action_time >= ?
+            ORDER BY visit_last_action_time DESC
+            LIMIT 1",
+            array($idSite, $timeLookBack)
         );
-*/
+
+        $visit = $visits->fetch();
+
+        // no visits, yet this is in the known visits callback. Something's 
+        // gone wrong, so just fail silently
+        if ($visit === false) {
+            return;
+        }
+
+        $idActionUrl = $visit['visit_exit_idaction_url']; 
+        $idVisit = $visit['idvisit']; 
+		
+        $this->doStepMatchAndSave(
+            $idSite,
+            $idVisit,
+            $idActionUrl
+        );
+
     }
 
     /**
@@ -154,6 +161,33 @@ class Piwik_Funnels extends Piwik_Plugin
     {
         $info = $notification->getNotificationInfo();
         $idSite = $info['idSite'];
+
+        $action = $notification->getNotificationObject();
+
+        // idRefererActionurl is the UID of theuer's LAST Action interacting 
+        // with Piwik.
+        // These two together give a link to a history of actions, and form a 
+        // type of linked list in the log_funnel_step table.
+        $this->doStepMatchAndSave(
+            $idSite,
+            $info['idVisit'],
+            $info['idRefererActionUrl'],
+            $action->getActionName(),
+            htmlspecialchars_decode($action->getActionUrl()),
+            $action->getIdActionUrl()
+        );
+
+    }
+
+    function doStepMatchAndSave(
+        $idSite,
+        $idVisit,
+        $idRefererAction,
+        $actionName = "",
+        $actionUrl = "",
+        $idActionUrl = Piwik_Funnels::INDEX_MANUAL_CONVERSION
+    ) {
+
         printDebug('Looking for funnel steps');
         $websiteAttributes = Piwik_Common::getCacheWebsiteAttributes( $idSite );
         if(isset($websiteAttributes['funnels']))
@@ -169,38 +203,8 @@ class Piwik_Funnels extends Piwik_Plugin
             return;
         }
 
-        $action = $notification->getNotificationObject();
-
-        // idLinkVisitAction is the UID of the user's current Action 
-        // interacting with Piwik.
-        // idRefererActionurl is the UID of theuer's LAST Action interacting 
-        // with Piwik.
-        // These two together give a link to a history of actions, and form a 
-        // type of linked list in the log_funnel_step table.
-        $this->doStepMatchAndSave(
-            $funnels,
-            $info['idVisit'],
-            $info['idLinkVisitAction'],
-            $info['idRefererActionUrl'],
-            $action->getActionName(),
-            htmlspecialchars_decode($action->getActionUrl()),
-            $action->getIdActionUrl()
-        );
-
-    }
-
-    function doStepMatchAndSave(
-        $funnels,
-        $idVisit,
-        $idLinkVisitAction,
-        $idRefererAction,
-        $actionName,
-        $actionUrl,
-        $idActionUrl
-    ) {
-
-        printDebug("idActionUrl" . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
-        # Is this the next action for a recorded funnel step? 
+        printDebug("idActionUrl " . $idActionUrl . " idSite " . $idSite . " idVisit " . $idVisit . " idRefererAction " . $idRefererAction);
+        // Is this the next action for a recorded funnel step? 
         $previous_step_action = Piwik_Query("UPDATE ".Piwik_Common::prefixTable('log_funnel_step')."
             SET   idaction_url_next = ?
             WHERE idsite = ? 
@@ -208,6 +212,13 @@ class Piwik_Funnels extends Piwik_Plugin
             AND   idaction_url = ?
             AND   idaction_url_next is null", 
             array($idActionUrl, $idSite, $idVisit, $idRefererAction));
+
+        // early out for special case of manual conversion
+        // Since this is a manual conversion for a goal, there is no URL to 
+        // match with, so the following loop is simply a waste of resources
+        if ($idActionUrl == Piwik_Funnels::INDEX_MANUAL_CONVERSION) {
+            return;
+        }
 
         foreach($funnels as &$funnel)
         {
@@ -230,7 +241,7 @@ class Piwik_Funnels extends Piwik_Plugin
                     $datetimeServer = Piwik_Tracker::getDatetimeFromTimestamp($serverTime);
 
                     // Look to see if this step has already been recorded for this visit 
-                    $exists = Piwik_FetchOne("SELECT idlink_va
+                    $exists = Piwik_FetchOne("SELECT *
                         FROM ".Piwik_Common::prefixTable('log_funnel_step')." 
                         WHERE idsite = ? 
                         AND   idfunnel = ?
@@ -243,11 +254,11 @@ class Piwik_Funnels extends Piwik_Plugin
                         printDebug("Recording...");
                         Piwik_Query("INSERT INTO " . Piwik_Common::prefixTable('log_funnel_step') . "
                             (idvisit, idsite, idaction_url, url, 
-                            idgoal, idfunnel, idstep, idlink_va, 
+                            idgoal, idfunnel, idstep, 
                             idaction_url_ref, server_time)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                 array($idVisit, $idSite, $idActionUrl, $url, 
-                                $funnel['idgoal'], $step['idfunnel'],$step['idstep'], $idLinkVisitAction, 
+                                $funnel['idgoal'], $step['idfunnel'],$step['idstep'],
                                 $idRefererAction, $datetimeServer));
                     }
                 }
@@ -292,15 +303,17 @@ class Piwik_Funnels extends Piwik_Plugin
             $idGoal = $funnelDefinition['idgoal'];
     
             // get the goal conversions grouped by the converting action
-            $goal_query = $archiveProcessing->queryConversionsByDimension('idaction_url');
+            $goal_query = $archiveProcessing->queryConversionsByDimension('idaction_url', '%s.idgoal = '.$idGoal);
             $goalConversions = array();
             while($row = $goal_query->fetch() )
             {
-                if($row['idgoal'] == $idGoal)
-                {
+                if ($row['label'] == null) {
+                    // A 'manual' conversion is changed to have an 
+                    // idaction_url of the magic number
+                    $goalConversions[Piwik_Funnels::INDEX_MANUAL_CONVERSION] = $row[Piwik_Archive::INDEX_GOAL_NB_CONVERSIONS];
+                } else {
                     $goalConversions[$row['label']] = $row[Piwik_Archive::INDEX_GOAL_NB_CONVERSIONS];
                 }
-                
             }
 
             for ($i = 0;$i <= $last_index; $i++) {
@@ -520,7 +533,6 @@ class Piwik_Funnels extends Piwik_Plugin
                           `idsite` int(11) NOT NULL,
                     	  `server_time` datetime NOT NULL,
                     	  `idaction_url` int(11) default NULL,
-                    	  `idlink_va` int(11) default NULL,
                           `idaction_url_ref` int(11) default NULL,
                           `idaction_url_next` int(11) default NULL,
                     	  `url` text NOT NULL,
