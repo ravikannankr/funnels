@@ -34,7 +34,7 @@ class Piwik_Funnels extends Piwik_Plugin
             'description' => Piwik_Translate('Funnels_PluginDescription'),
             'author' => 'mySociety',
             'author_homepage' => 'http://mysociety.org/',
-            'version' => '0.1',
+            'version' => '20062011',
             'homepage' => 'http://github.com/mysociety/funnels',
             'translationAvailable' => true,
             'TrackerPlugin' => true, // this plugin must be loaded during the stats logging
