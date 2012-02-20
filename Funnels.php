@@ -699,7 +699,7 @@ class Piwik_Funnels extends Piwik_Plugin
         {
             $idStepStr = $idStep . '_';
         }
-        return 'Funnel_' . $idFunnelStr . $idStepStr . $recordName;
+        return 'Funnels_' . $idFunnelStr . $idStepStr . $recordName;
     }
     
     /**
