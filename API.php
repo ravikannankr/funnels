@@ -145,7 +145,7 @@ class Piwik_Funnels_API
 		Piwik_Query("UPDATE ". Piwik_Common::prefixTable('funnel_step')."
 					 SET deleted = 1
 					 $whereClause", $params);
-		Piwik_Common::regenerateCacheWebsiteAttributes($idSite);
+		Piwik_Tracker_Cache::regenerateCacheWebsiteAttributes($idSite);
 	}
 	
 	public function deleteFunnel( $idSite, $idGoal, $idFunnel )
@@ -157,7 +157,7 @@ class Piwik_Funnels_API
 										AND idgoal = ?
 										AND idfunnel = ?",
 									array($idSite, $idGoal, $idFunnel));
-		Piwik_Common::regenerateCacheWebsiteAttributes($idSite);
+		Piwik_Tracker_Cache::regenerateCacheWebsiteAttributes($idSite);
 	}
 	
 	// Get the referring URLs for a funnel step
