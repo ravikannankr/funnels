@@ -10,6 +10,9 @@
 			{if count($funnels) > 0}
 			<li><a onclick='' name='linkEditFunnels'><u>{'Funnels_EditExistingFunnel'|translate}</u></a></li>
 			{/if}
+			{if count($funnels) == 0 && count($goalsWithoutFunnels) == 0}
+			<li>You have to create a goal for this website to be used by a funnel</li>
+			{/if}
 		</ul>
 		<br>
 {/if}
