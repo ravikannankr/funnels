@@ -6,9 +6,16 @@ Credits
 =======
 German translation by Uwe Schulz
 Updated to work with Piwik v1.5 by Jess Telford @ Zibbet.com
+Updated to work with Piwik v1.12 by Christian Suenkel <piwik@suenkel.de>
 
 Changelog
 =========
+
+Funnels 1.12.1
+--------------
+* fix deprecated Piwik_Common::regenerateCacheWebsiteAttributes($idSite);
+* rework menu priority and structure depning on existing funnels
+* add a few translations/text
 
 Funnels 1.11.1
 --------------
