@@ -35,9 +35,9 @@ class Piwik_Funnels extends Piwik_Plugin
             'description' => Piwik_Translate('Funnels_PluginDescription'),
             'author' => 'Smile',
             'author_homepage' => 'http://www.smile.fr/',
-            'version' => '1.11.1',
+            'version' => '1.12',
             'translationAvailable' => true,
-            'homepage' => 'https://github.com/YanK-fr/funnels',
+            'homepage' => 'https://github.com/csuenkel/funnels',
             'TrackerPlugin' => true, // this plugin must be loaded during the stats logging
         );
     }
