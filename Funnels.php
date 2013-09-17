@@ -295,19 +295,16 @@ class Piwik_Funnels extends Piwik_Plugin
         $idSite = Piwik_Common::getRequestVar('idSite');
      	$funnels = Piwik_Funnels_API::getInstance()->getFunnels($idSite);
         $goalsWithoutFunnels = Piwik_Funnels_API::getInstance()->getGoalsWithoutFunnels($idSite);
-        if(count($funnels) == 0 && count($goalsWithoutFunnels) > 0)
-        {	
-        	Piwik_AddMenu('Funnels', '', array('module' => 'Funnels', action=> 'addNewFunnel'), true, 40);
-            Piwik_AddMenu('Funnels', Piwik_Translate('Funnels_AddNewFunnel') , array('module' => 'Funnels', 'action' => 'addNewFunnel'));
-        } else {
-        	Piwik_AddMenu('Funnels_Funnels', '', array('module' => 'Funnels'), true, 40);
-            Piwik_AddMenu('Funnels_Funnels', 'Funnels_Overview', array('module' => 'Funnels'));	
+        Piwik_AddMenu('Funnels', '', array('module' => 'Funnels'), true, 40);
+        Piwik_AddMenu('Funnels', 'Funnels_Overview', array('module' => 'Funnels'));	
             foreach($funnels as $funnel) 
             {
-                Piwik_AddMenu('Funnels_Funnels', str_replace('%', '%%', $funnel['goal_name']), array('module' => 'Funnels', 'action' => 'funnelReport', 'idFunnel' => $funnel['idfunnel']));
+                Piwik_AddMenu('Funnels', str_replace('%', '%%', $funnel['goal_name']), array('module' => 'Funnels', 'action' => 'funnelReport', 'idFunnel' => $funnel['idfunnel']));
             }
-
-        }
+            if(count($goalsWithoutFunnels) > 0)
+            {
+            	Piwik_AddMenu('Funnels', Piwik_Translate('Funnels_AddNewFunnel') , array('module' => 'Funnels', 'action' => 'addNewFunnel'));
+            }
     }
     
     function archiveDay( $notification )
